@@ -16,7 +16,7 @@ import (
 
 var client *github.Client
 
-func addRunner(owner, repo string) {
+func addRunner(owner, repo, runnerLoc string) {
 	r, _, err := client.Actions.CreateRegistrationToken(context.Background(), repo, owner)
 	if err != nil {
 		panic(err)
@@ -34,11 +34,8 @@ func addRunner(owner, repo string) {
 		"--url", fmt.Sprintf("https://github.com/%s/%s", owner, repo),
 		"--token", token,
 		"--name", fmt.Sprintf("runner-%s-%d", host, time.Now().Unix()))
-	runnerLoc := os.Getenv("RUNNER_LOCATION")
 	cmd.Env = os.Environ()
-	if runnerLoc != "" {
-		cmd.Dir = runnerLoc
-	}
+	cmd.Dir = runnerLoc
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -48,25 +45,19 @@ func addRunner(owner, repo string) {
 	}
 }
 
-func run() {
-	args := os.Args[1:]
-	if len(args) == 0 {
-		panic("No command provided")
-	}
-	bin := args[0]
-	left := make([]string, 0, len(args)-1)
-	if len(args) != 1 {
-		left = args[1:]
-	}
-
-	cmd := exec.Command(bin, left...)
+func run(runnerLoc string) {
+	cmd := exec.Command("bash", "./run.sh")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	_ = cmd.Run()
+	cmd.Dir = runnerLoc
+	err := cmd.Run()
+	if err != nil {
+		panic(err)
+	}
 }
 
-func removeRunner(owner, repo string) {
+func removeRunner(owner, repo, runnerLoc string) {
 	r, _, err := client.Actions.CreateRemoveToken(context.Background(), repo, owner)
 	if err != nil {
 		panic(err)
@@ -75,11 +66,8 @@ func removeRunner(owner, repo string) {
 
 	token := r.GetToken()
 	cmd := exec.Command("bash", "./config.sh", "remove", "--token", token)
-	runnerLoc := os.Getenv("RUNNER_LOCATION")
 	cmd.Env = os.Environ()
-	if runnerLoc != "" {
-		cmd.Dir = runnerLoc
-	}
+	cmd.Dir = runnerLoc
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -89,12 +77,12 @@ func removeRunner(owner, repo string) {
 	}
 }
 
-func prepareRemove(owner, repo string) {
+func prepareRemove(owner, repo, runnerLoc string) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-c
-		removeRunner(owner, repo)
+		removeRunner(owner, repo, runnerLoc)
 		os.Exit(0)
 	}()
 }
@@ -121,8 +109,18 @@ func main() {
 		panic("Invalid GITHUB_REPOSITORY " + repo)
 	}
 
-	addRunner(owner, repo)
-	prepareRemove(owner, repo)
+	runnerLoc := os.Getenv("RUNNER_LOCATION")
+	if runnerLoc == "" {
+		runnerLoc, err = os.Getwd()
+		if err != nil {
+			panic(err)
+		}
+	}
 
-	run()
+	addRunner(owner, repo, runnerLoc)
+	prepareRemove(owner, repo, runnerLoc)
+
+	run(runnerLoc)
+
+	removeRunner(owner, repo, runnerLoc)
 }
