@@ -17,7 +17,7 @@ import (
 var client *github.Client
 
 func addRunner(owner, repo, runnerLoc string) {
-	r, _, err := client.Actions.CreateRegistrationToken(context.Background(), repo, owner)
+	r, _, err := client.Actions.CreateRegistrationToken(context.Background(), owner, repo)
 	if err != nil {
 		panic(err)
 	}
@@ -58,7 +58,7 @@ func run(runnerLoc string) {
 }
 
 func removeRunner(owner, repo, runnerLoc string) {
-	r, _, err := client.Actions.CreateRemoveToken(context.Background(), repo, owner)
+	r, _, err := client.Actions.CreateRemoveToken(context.Background(), owner, repo)
 	if err != nil {
 		panic(err)
 	}
